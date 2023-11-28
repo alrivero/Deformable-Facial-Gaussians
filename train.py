@@ -22,6 +22,9 @@ from tqdm import tqdm
 from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
+from pytorch3d.ops import knn_points
+from flame.flame import FlameHead
+import re
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -30,14 +33,36 @@ try:
 except ImportError:
     TENSORBOARD_FOUND = False
 
+def flame_forward(flame_head, params):
+    vertices, landmarks = flame_head(
+        params["shape"][None],
+        params["expr"][None],
+        params["rotation"][None],
+        params["neck_pose"][None],
+        params["jaw_pose"][None],
+        params["eyes_pose"][None],
+        params["translation"][None]
+    )
 
-def training(dataset, opt, pipe, testing_iterations, saving_iterations):
+    vertices *= params["scale"]
+    landmarks *= params["scale"]
+
+    return vertices, landmarks
+
+
+def training(dataset, opt, pipe, testing_iterations, saving_iterations, include_flame_del=True, shape_len=300, exp_len=100, knn_k=5):
     tb_writer = prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree)
     deform = DeformModel(dataset.is_blender, dataset.is_6dof)
     deform.train_setting(opt)
 
     scene = Scene(dataset, gaussians)
+
+    if include_flame_del:
+        flame_head = FlameHead(shape_len, exp_len).cuda()
+        flame_params = scene.getFlameParams(0)
+        canon_flame_vertices, canon_flame_landmarks = flame_forward(flame_head, flame_params)
+
     gaussians.training_setup(opt)
 
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
@@ -87,6 +112,20 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations):
             viewpoint_cam.load2device()
         fid = viewpoint_cam.fid
 
+        if include_flame_del:
+            with torch.no_grad():
+                # Need to get t
+                t = int(re.search(r'\d+', viewpoint_cam.image_name).group()) - 1
+                flame_params = scene.getFlameParams(t)
+                flame_vertices, _ = flame_forward(flame_head, flame_params)
+                d_flame_local = (flame_vertices - canon_flame_vertices)[0]
+
+            k_dists_idxs = knn_points(gaussians.get_xyz[None], canon_flame_vertices, K=knn_k)
+            k_dists_exp = torch.exp(k_dists_idxs.dists[0])
+
+            d_flame = d_flame_local[k_dists_idxs.idx[0]] / k_dists_exp.unsqueeze(-1)
+            d_flame = d_flame.mean(1)
+
         if iteration < opt.warm_up:
             d_xyz, d_rotation, d_scaling = 0.0, 0.0, 0.0
         else:
@@ -94,7 +133,25 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations):
             time_input = fid.unsqueeze(0).expand(N, -1)
 
             ast_noise = 0 if dataset.is_blender else torch.randn(1, 1, device='cuda').expand(N, -1) * time_interval * smooth_term(iteration)
-            d_xyz, d_rotation, d_scaling = deform.step(gaussians.get_xyz.detach(), time_input + ast_noise)
+            d_xyz, d_rotation, d_scaling = deform.step(gaussians.get_xyz.detach(), time_input)
+        
+        if include_flame_del:
+            with torch.no_grad():
+                # Need to get t
+                t = int(re.search(r'\d+', viewpoint_cam.image_name).group()) - 1
+                flame_params = scene.getFlameParams(t)
+                flame_vertices, _ = flame_forward(flame_head, flame_params)
+                d_flame_local = (flame_vertices - canon_flame_vertices)[0]
+
+            k_dists_idxs = knn_points(gaussians.get_xyz[None], canon_flame_vertices, K=knn_k)
+            k_dists_exp = torch.exp(-k_dists_idxs.dists[0])
+
+            d_flame = d_flame_local[k_dists_idxs.idx[0]] * k_dists_exp.unsqueeze(-1)
+            d_flame = d_flame.mean(1)
+            
+            if iteration >= opt.warm_up:
+                import pdb; pdb.set_trace()
+                d_xyz += d_flame
 
         # Render
         render_pkg_re = render(viewpoint_cam, gaussians, pipe, background, d_xyz, d_rotation, d_scaling, dataset.is_6dof)
@@ -103,7 +160,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations):
         # depth = render_pkg_re["depth"]
 
         # Loss
-        gt_image = viewpoint_cam.original_image.cuda()
+        gt_image = viewpoint_cam.original_image.cuda() + 1
         Ll1 = l1_loss(image, gt_image)
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
         loss.backward()

@@ -9,9 +9,11 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 
+import json
 import os
 import random
-import json
+import torch
+import numpy as np
 from utils.system_utils import searchForMaxIteration
 from scene.dataset_readers import sceneLoadTypeCallbacks
 from scene.gaussian_model import GaussianModel
@@ -24,7 +26,7 @@ class Scene:
     gaussians: GaussianModel
 
     def __init__(self, args: ModelParams, gaussians: GaussianModel, load_iteration=None, shuffle=True,
-                 resolution_scales=[1.0]):
+                 resolution_scales=[1.0], include_flame=True):
         """b
         :param path: Path to colmap scene main folder.
         """
@@ -100,6 +102,9 @@ class Scene:
         else:
             self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent)
 
+        if include_flame:
+            self.flame_data = np.load(f"{args.source_path}/tracked_flame_params.npz")
+
     def save(self, iteration):
         point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))
         self.gaussians.save_ply(os.path.join(point_cloud_path, "point_cloud.ply"))
@@ -109,3 +114,16 @@ class Scene:
 
     def getTestCameras(self, scale=1.0):
         return self.test_cameras[scale]
+
+    def getFlameParams(self, t):
+        flame_params = {}
+        flame_params["rotation"] = torch.tensor(self.flame_data["rotation"][t]).cuda()
+        flame_params["translation"] = torch.tensor(self.flame_data["translation"][t]).cuda()
+        flame_params["neck_pose"] = torch.tensor(self.flame_data["neck_pose"][t]).cuda()
+        flame_params["jaw_pose"] = torch.tensor(self.flame_data["jaw_pose"][t]).cuda()
+        flame_params["eyes_pose"] = torch.tensor(self.flame_data["eyes_pose"][t]).cuda()
+        flame_params["expr"] = torch.tensor(self.flame_data["expr"][t]).cuda()
+        flame_params["shape"] = torch.tensor(self.flame_data["shape"]).cuda()
+        flame_params["scale"] = torch.tensor(self.flame_data["scale"]).cuda()
+
+        return flame_params

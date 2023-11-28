@@ -19,6 +19,7 @@ from utils.graphics_utils import getWorld2View2, focal2fov, fov2focal
 import numpy as np
 import json
 import imageio
+import re
 from glob import glob
 import cv2 as cv
 from pathlib import Path
@@ -129,11 +130,16 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
         else:
             assert False, "Colmap camera model not handled: only undistorted datasets (PINHOLE or SIMPLE_PINHOLE cameras) supported!"
 
-        image_path = os.path.join(images_folder, os.path.basename(extr.name))
+        image_path = os.path.join(images_folder, os.path.basename(extr.name.replace("-checkpoint","")))
         image_name = os.path.basename(image_path).split(".")[0]
         image = Image.open(image_path)
 
-        fid = int(image_name) / (num_frames - 1)
+        image_np = np.asarray(image)
+        image.close()
+        image = Image.fromarray(image_np)
+
+        match = re.search(r'\d+', extr.name)
+        fid = int(match.group()) / (num_frames - 1)
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
                               image_path=image_path, image_name=image_name, width=width, height=height, fid=fid)
         cam_infos.append(cam_info)

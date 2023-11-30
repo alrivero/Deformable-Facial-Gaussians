@@ -74,3 +74,43 @@ def _ssim(img1, img2, window, window_size, channel, size_average=True):
         return ssim_map.mean()
     else:
         return ssim_map.mean(1).mean(1).mean(1)
+
+def normalize_image_points(u, v, resolution):
+    """
+    normalizes u, v coordinates from [0 ,image_size] to [-1, 1]
+    :param u:
+    :param v:
+    :param resolution:
+    :return:
+    """
+    u = 2 * (u - resolution[1] / 2.0) / resolution[1]
+    v = 2 * (v - resolution[0] / 2.0) / resolution[0]
+    return u, v
+
+def lmk_energy_loss(proj_pred_lmks, gt_lmks, H=512, W=512):
+    """
+    Computes the landmark energy loss term between groundtruth landmarks and flame landmarks
+    :param sample:
+    :param pred_lmks:
+    :return: the lmk loss for all 68 facial landmarks, a separate 2 pupil landmark loss and
+                a relative eye close term
+    """
+    lmks, confidence = gt_lmks[:, :2], gt_lmks[:, 2]
+    lmks[:, 0], lmks[:, 1] = normalize_image_points(
+        lmks[:, 0], lmks[:, 1], (H, W)
+    )
+
+    proj_pred_lmks[:, 0], proj_pred_lmks[:, 1] = normalize_image_points(
+        proj_pred_lmks[:, 0], proj_pred_lmks[:, 1], (H, W)
+    )
+
+    proj_pred_lmks = proj_pred_lmks[:, :2]
+    diff = lmks - proj_pred_lmks
+
+    # compute general landmark term
+    lmk_loss = torch.norm(diff[:68], dim=-1, p=1) * confidence[:68]
+
+    # compute pupil landmark term
+    eye_lmk_loss = torch.norm(diff[68:], dim=-1, p=1) * confidence[68:]
+
+    return lmk_loss.mean(), eye_lmk_loss.mean()

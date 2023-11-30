@@ -12,6 +12,7 @@
 import os
 import time
 import torch
+import re
 from random import randint
 from utils.loss_utils import l1_loss, ssim, kl_divergence
 from gaussian_renderer import render, network_gui
@@ -529,6 +530,10 @@ class GUI:
                 net_image_bytes = None
                 custom_cam, do_training, self.pipe.do_shs_python, self.pipe.do_cov_python, keep_alive, scaling_modifer = network_gui.receive()
                 if custom_cam != None:
+                    t = int(re.search(r'\d+', custom_cam.image_name).group()) - 1
+                    flame_params = self.scene.getFlameParams(t)
+                    self.gaussians.update_flame_xyz(flame_params, t)
+
                     net_image = render(custom_cam, self.gaussians, self.pipe, self.background, scaling_modifer)["render"]
                     net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2,
                                                                                                             0).contiguous().cpu().numpy())
@@ -563,6 +568,10 @@ class GUI:
             time_input = fid.unsqueeze(0).expand(N, -1)
             ast_noise = 0 if self.dataset.is_blender else torch.randn(1, 1, device='cuda').expand(N, -1) * time_interval * self.smooth_term(self.iteration)
             d_xyz, d_rotation, d_scaling = self.deform.step(self.gaussians.get_xyz.detach(), time_input + ast_noise)
+
+        t = int(re.search(r'\d+', viewpoint_cam.image_name).group()) - 1
+        flame_params = self.scene.getFlameParams(t)
+        self.gaussians.update_flame_xyz(flame_params, t)
 
         # Render
         render_pkg_re = render(viewpoint_cam, self.gaussians, self.pipe, self.background, d_xyz, d_rotation, d_scaling, self.dataset.is_6dof)
@@ -670,6 +679,10 @@ class GUI:
             N = self.gaussians.get_xyz.shape[0]
             time_input = fid.unsqueeze(0).expand(N, -1)
             d_xyz, d_rotation, d_scaling = self.deform.step(self.gaussians.get_xyz.detach(), time_input)
+
+        t = int(re.search(r'\d+', cur_cam.image_name).group()) - 1
+        flame_params = self.scene.getFlameParams(t)
+        self.gaussians.update_flame_xyz(flame_params, t)
         
         out = render(viewpoint_camera=cur_cam, pc=self.gaussians, pipe=self.pipe, bg_color=self.background, d_xyz=d_xyz, d_rotation=d_rotation, d_scaling=d_scaling, is_6dof=self.dataset.is_6dof)
 

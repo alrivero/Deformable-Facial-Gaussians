@@ -19,6 +19,7 @@ from utils.graphics_utils import getWorld2View2, focal2fov, fov2focal
 import numpy as np
 import json
 import imageio
+import torch
 import re
 from glob import glob
 import cv2 as cv
@@ -36,6 +37,8 @@ class CameraInfo(NamedTuple):
     FovY: np.array
     FovX: np.array
     image: np.array
+    extr: np.array
+    intr: np.array
     image_path: str
     image_name: str
     width: int
@@ -138,10 +141,17 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
         image.close()
         image = Image.fromarray(image_np)
 
+        K = torch.zeros((3, 3)).float().cuda()
+        K[0, 0] = intr.params[0]
+        K[1, 1] = intr.params[0]
+        K[2, 2] = 1.0
+        K[0, 2] = intr.params[1]
+        K[1, 2] = intr.params[2]
+
         match = re.search(r'\d+', extr.name)
         fid = int(match.group()) / (num_frames - 1)
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                              image_path=image_path, image_name=image_name, width=width, height=height, fid=fid)
+                              image_path=image_path, image_name=image_name, width=width, height=height, fid=fid, extr=extr, intr=K)
         cam_infos.append(cam_info)
     sys.stdout.write('\n')
     return cam_infos

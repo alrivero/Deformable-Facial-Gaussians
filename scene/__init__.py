@@ -16,17 +16,17 @@ import torch
 import numpy as np
 from utils.system_utils import searchForMaxIteration
 from scene.dataset_readers import sceneLoadTypeCallbacks
-from scene.gaussian_model import GaussianModel
+from scene.facial_gaussian_model import FacialGaussianModel
 from scene.deform_model import DeformModel
 from arguments import ModelParams
 from utils.camera_utils import cameraList_from_camInfos, camera_to_JSON
 
 
 class Scene:
-    gaussians: GaussianModel
+    gaussians: FacialGaussianModel
 
-    def __init__(self, args: ModelParams, gaussians: GaussianModel, load_iteration=None, shuffle=True,
-                 resolution_scales=[1.0], include_flame=True):
+    def __init__(self, args: ModelParams, gaussians: FacialGaussianModel, load_iteration=None, shuffle=True,
+                 resolution_scales=[1.0], include_flame=True, include_landmarks=True):
         """b
         :param path: Path to colmap scene main folder.
         """
@@ -104,6 +104,42 @@ class Scene:
 
         if include_flame:
             self.flame_data = np.load(f"{args.source_path}/tracked_flame_params.npz")
+            self.gaussians.init_flame_mesh(self.getFlameParams(0), self.flame_data)
+
+        if include_landmarks:
+            self.init_landmarks(args)
+
+    def init_landmarks(self, args):
+        landmarks_dir = os.path.join(args.source_path, "landmarks")
+        landmark_subdirs = sorted([item for item in os.listdir(landmarks_dir) if os.path.isdir(os.path.join(landmarks_dir, item))])
+
+        self.all_lmk2d = []
+        self.all_lmk2d_iris = []
+        for subdir in landmark_subdirs:
+            with open(os.path.join(landmarks_dir, subdir, "keypoints_static_0000.json"), "r") as f:
+                lmks_info = json.load(f)
+                lmks_view = lmks_info["people"][0]["face_keypoints_2d"]
+                lmks_iris = lmks_info["people"][0].get("iris_keypoints_2d", None)
+
+            lmk2d = (
+                torch.from_numpy(np.array(lmks_view)).float()[:204].view(-1, 3)
+            )
+            # scale coordinates
+            lmk2d[:, 2:] = 1.0
+
+            if lmks_iris is not None:
+                lmk2d_iris = torch.from_numpy(np.array(lmks_iris)).float()[:204]
+                lmk2d_iris = lmk2d_iris.view(-1, 3)[[1, 0]]
+
+            if lmks_iris is not None:
+                if torch.sum(lmk2d_iris[:, :2] == -1) > 0:
+                    lmk2d_iris[:, 2:] = 0.0
+                else:
+                    lmk2d_iris[:, 2:] = 1.0
+
+            self.all_lmk2d.append(torch.cat((lmk2d, lmk2d_iris))[None])
+
+        self.all_lmk2d = torch.cat(self.all_lmk2d)
 
     def save(self, iteration):
         point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))

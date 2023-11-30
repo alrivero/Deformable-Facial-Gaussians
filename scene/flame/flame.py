@@ -27,11 +27,11 @@ import numpy as np
 import pickle
 import torch.nn.functional as F
 
-FLAME_MODEL_PATH = "flame/assets/generic_model.pkl"
-FLAME_MESH_PATH = "flame/assets/head_template_mesh.obj"
-FLAME_PARTS_PATH = "flame/assets/FLAME_masks.pkl"
-FLAME_LMK_PATH = "flame/assets/landmark_embedding_with_eyes.npy"
-FLAME_TEX_PATH = "flame/assets/FLAME_texture.npz"
+FLAME_MODEL_PATH = "scene/flame/assets/generic_model.pkl"
+FLAME_MESH_PATH = "scene/flame/assets/head_template_mesh.obj"
+FLAME_PARTS_PATH = "scene/flame/assets/FLAME_masks.pkl"
+FLAME_LMK_PATH = "scene/flame/assets/landmark_embedding_with_eyes.npy"
+FLAME_TEX_PATH = "scene/flame/assets/FLAME_texture.npz"
 
 
 def to_tensor(array, dtype=torch.float32):

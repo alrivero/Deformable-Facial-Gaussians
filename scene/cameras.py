@@ -17,7 +17,7 @@ from utils.graphics_utils import getWorld2View2, getProjectionMatrix
 
 class Camera(nn.Module):
     def __init__(self, colmap_id, R, T, FoVx, FoVy, image, gt_alpha_mask, image_name, uid,
-                 trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device="cuda", fid=None, depth=None):
+                 trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device="cuda", fid=None, depth=None, extr=None, intr=None):
         super(Camera, self).__init__()
 
         self.uid = uid
@@ -60,6 +60,9 @@ class Camera(nn.Module):
             self.world_view_transform.unsqueeze(0).bmm(self.projection_matrix.unsqueeze(0))).squeeze(0)
         self.camera_center = self.world_view_transform.inverse()[3, :3]
 
+        self.extr = extr
+        self.intr = intr
+
     def reset_extrinsic(self, R, T):
         self.world_view_transform = torch.tensor(getWorld2View2(R, T, self.trans, self.scale)).transpose(0, 1).cuda()
         self.full_proj_transform = (
@@ -73,6 +76,7 @@ class Camera(nn.Module):
         self.full_proj_transform = self.full_proj_transform.to(data_device)
         self.camera_center = self.camera_center.to(data_device)
         self.fid = self.fid.to(data_device)
+        self.intr = self.intr.to(data_device)
 
 
 class MiniCam:

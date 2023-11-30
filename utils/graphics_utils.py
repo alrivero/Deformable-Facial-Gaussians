@@ -82,3 +82,18 @@ def fov2focal(fov, pixels):
 
 def focal2fov(focal, pixels):
     return 2 * math.atan(pixels / (2 * focal))
+
+def project_to_screen(points, all_k, all_w2c):
+    points = torch.cat((points, torch.ones((len(points), 1)).cuda()), dim=-1)
+    points = points.unsqueeze(0).expand(len(all_k), -1, -1)
+
+    # Now convert into camera space and project onto focal plane
+    points_cam = torch.bmm(points, all_w2c.transpose(1, 2))
+    points_cam = points_cam[:, :, :3]
+    points_cam /= points_cam[:, :, [2]]
+
+    # Now bring them into screen space and define uvs
+    points_screen = torch.bmm(points_cam, all_k.transpose(1, 2))
+    uvs = torch.ceil(points_screen)
+
+    return uvs

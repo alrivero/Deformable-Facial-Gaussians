@@ -26,7 +26,7 @@ class Scene:
     gaussians: FacialGaussianModel
 
     def __init__(self, args: ModelParams, gaussians: FacialGaussianModel, load_iteration=None, shuffle=True,
-                 resolution_scales=[1.0], include_flame=True, include_landmarks=True):
+                 resolution_scales=[1.0], include_flame=True, include_landmarks=False):
         """b
         :param path: Path to colmap scene main folder.
         """

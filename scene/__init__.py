@@ -20,7 +20,7 @@ from scene.facial_gaussian_model import FacialGaussianModel
 from scene.deform_model import DeformModel
 from arguments import ModelParams
 from utils.camera_utils import cameraList_from_camInfos, camera_to_JSON
-
+from math import ceil, floor
 
 class Scene:
     gaussians: FacialGaussianModel
@@ -153,13 +153,27 @@ class Scene:
 
     def getFlameParams(self, t):
         flame_params = {}
-        flame_params["rotation"] = torch.tensor(self.flame_data["rotation"][t]).cuda()
-        flame_params["translation"] = torch.tensor(self.flame_data["translation"][t]).cuda()
-        flame_params["neck_pose"] = torch.tensor(self.flame_data["neck_pose"][t]).cuda()
-        flame_params["jaw_pose"] = torch.tensor(self.flame_data["jaw_pose"][t]).cuda()
-        flame_params["eyes_pose"] = torch.tensor(self.flame_data["eyes_pose"][t]).cuda()
-        flame_params["expr"] = torch.tensor(self.flame_data["expr"][t]).cuda()
+        if isinstance(t, int):
+            flame_params["rotation"] = torch.tensor(self.flame_data["rotation"][t]).cuda()
+            flame_params["translation"] = torch.tensor(self.flame_data["translation"][t]).cuda()
+            flame_params["neck_pose"] = torch.tensor(self.flame_data["neck_pose"][t]).cuda()
+            flame_params["jaw_pose"] = torch.tensor(self.flame_data["jaw_pose"][t]).cuda()
+            flame_params["eyes_pose"] = torch.tensor(self.flame_data["eyes_pose"][t]).cuda()
+            flame_params["expr"] = torch.tensor(self.flame_data["expr"][t]).cuda()
+        else:
+            t_after = ceil(t * (len(self.flame_data["rotation"]) - 1))
+            t_before = floor(t * (len(self.flame_data["rotation"]) - 1))
+            lmd = (t * (len(self.flame_data["rotation"]) - 1)) - t_before
+
+            flame_params["rotation"] = torch.tensor(lmd * self.flame_data["rotation"][t_after] + (1 - lmd) * self.flame_data["rotation"][t_before]).cuda()
+            flame_params["translation"] = torch.tensor(lmd * self.flame_data["translation"][t_after] + (1 - lmd) * self.flame_data["translation"][t_before]).cuda()
+            flame_params["neck_pose"] = torch.tensor(lmd * self.flame_data["neck_pose"][t_after] + (1 - lmd) * self.flame_data["neck_pose"][t_before]).cuda()
+            flame_params["jaw_pose"] = torch.tensor(lmd * self.flame_data["jaw_pose"][t_after] + (1 - lmd) * self.flame_data["jaw_pose"][t_before]).cuda()
+            flame_params["eyes_pose"] = torch.tensor(lmd * self.flame_data["eyes_pose"][t_after] + (1 - lmd) * self.flame_data["eyes_pose"][t_before]).cuda()
+            flame_params["expr"] = torch.tensor(lmd * self.flame_data["expr"][t_after] + (1 - lmd) * self.flame_data["expr"][t_before]).cuda()
+        
         flame_params["shape"] = torch.tensor(self.flame_data["shape"]).cuda()
         flame_params["scale"] = torch.tensor(self.flame_data["scale"]).cuda()
+
 
         return flame_params

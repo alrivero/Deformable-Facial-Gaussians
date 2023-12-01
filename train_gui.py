@@ -17,7 +17,7 @@ from random import randint
 from utils.loss_utils import l1_loss, ssim, kl_divergence
 from gaussian_renderer import render, network_gui
 import sys
-from scene import Scene, GaussianModel, DeformModel
+from scene import Scene, FacialGaussianModel, DeformModel
 from utils.general_utils import safe_state, get_linear_noise_func
 import uuid
 import tqdm
@@ -95,7 +95,7 @@ class GUI:
         self.saving_iterations = saving_iterations
 
         self.tb_writer = prepare_output_and_logger(dataset)
-        self.gaussians = GaussianModel(dataset.sh_degree)
+        self.gaussians = FacialGaussianModel(dataset.sh_degree)
         self.deform = DeformModel(is_blender=dataset.is_blender, is_6dof=dataset.is_6dof)
         self.deform.train_setting(opt)
 
@@ -358,8 +358,6 @@ class GUI:
                         callback=callback_save,
                         user_data='geo+tex',
                     )
-                    dpg.bind_item_theme("_button_save_mesh_with_tex", theme_button)
-
                     dpg.add_button(
                         label="pcl",
                         tag="_button_save_pcl",
@@ -530,7 +528,7 @@ class GUI:
                 net_image_bytes = None
                 custom_cam, do_training, self.pipe.do_shs_python, self.pipe.do_cov_python, keep_alive, scaling_modifer = network_gui.receive()
                 if custom_cam != None:
-                    t = int(re.search(r'\d+', custom_cam.image_name).group()) - 1
+                    t = custom_cam.fid.item()
                     flame_params = self.scene.getFlameParams(t)
                     self.gaussians.update_flame_xyz(flame_params, t)
 
@@ -565,11 +563,11 @@ class GUI:
             d_xyz, d_rotation, d_scaling = 0.0, 0.0, 0.0
         else:
             N = self.gaussians.get_xyz.shape[0]
-            time_input = fid.unsqueeze(0).expand(N, -1)
+            time_input =fid.unsqueeze(0).expand(N, -1)
             ast_noise = 0 if self.dataset.is_blender else torch.randn(1, 1, device='cuda').expand(N, -1) * time_interval * self.smooth_term(self.iteration)
             d_xyz, d_rotation, d_scaling = self.deform.step(self.gaussians.get_xyz.detach(), time_input + ast_noise)
 
-        t = int(re.search(r'\d+', viewpoint_cam.image_name).group()) - 1
+        t = fid.item()
         flame_params = self.scene.getFlameParams(t)
         self.gaussians.update_flame_xyz(flame_params, t)
 
@@ -680,7 +678,7 @@ class GUI:
             time_input = fid.unsqueeze(0).expand(N, -1)
             d_xyz, d_rotation, d_scaling = self.deform.step(self.gaussians.get_xyz.detach(), time_input)
 
-        t = int(re.search(r'\d+', cur_cam.image_name).group()) - 1
+        t = fid.item()
         flame_params = self.scene.getFlameParams(t)
         self.gaussians.update_flame_xyz(flame_params, t)
         

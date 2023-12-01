@@ -90,13 +90,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, shape_le
             viewpoint_cam.load2device()
         fid = viewpoint_cam.fid
 
-        t = int(re.search(r'\d+', viewpoint_cam.image_name).group()) - 1
+        t = fid.item()
         flame_params = scene.getFlameParams(t)
         gaussians.update_flame_xyz(flame_params, t)
-
-        # proj_lmk2d = project_to_screen(gaussians._flame_lmks, viewpoint_cam.intr[None], viewpoint_cam.world_view_transform.inverse()[None])[0]
-        # gt_lmk2d = scene.all_lmk2d[t].cuda()
-        # lmk_loss, lmk_loss_eyes = lmk_energy_loss(proj_lmk2d, gt_lmk2d)
 
         if iteration < opt.warm_up:
             d_xyz, d_rotation, d_scaling = 0.0, 0.0, 0.0
@@ -227,7 +223,7 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                     if load2gpu_on_the_fly:
                         viewpoint.load2device()
                     
-                    t = int(re.search(r'\d+', viewpoint.image_name).group()) - 1
+                    t = viewpoint.fid.item()
                     flame_params = scene.getFlameParams(t)
                     scene.gaussians.update_flame_xyz(flame_params, t)
 

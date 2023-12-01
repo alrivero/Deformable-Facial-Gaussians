@@ -12,6 +12,7 @@ from utils.general_utils import strip_symmetric, build_scaling_rotation
 from .flame.flame import FlameHead
 from .gaussian_model import GaussianModel
 import debug
+from math import ceil, floor
 
 class FacialGaussianModel(GaussianModel):
     def __init__(self, sh_degree, shape_len=300, exp_len=100):
@@ -123,7 +124,17 @@ class FacialGaussianModel(GaussianModel):
                 if param_name == "scale" or param_name == "shape":
                     final_params[param_name] = self.trained_flame_params[param_name]
                 else:
-                    final_params[param_name] = self.trained_flame_params[param_name][t]
+                    if isinstance(t, int):
+                        final_params[param_name] = self.trained_flame_params[param_name][t]
+                    else:
+                        t_after = ceil(t * (len(self.trained_flame_params[param_name]) - 1))
+                        t_before = floor(t * (len(self.trained_flame_params[param_name]) - 1))
+                        lmd = (t * (len(self.trained_flame_params[param_name]) - 1)) - t_before
+
+                        final_params[param_name] = torch.tensor(
+                            lmd * self.trained_flame_params[param_name][t_after] +
+                            (1 - lmd) * self.trained_flame_params[param_name][t_before]
+                        ).cuda()
             else:
                 final_params[param_name] = params[param_name]
 
@@ -228,7 +239,6 @@ class FacialGaussianModel(GaussianModel):
         # self.trained_flame_params["rotation"] = nn.Parameter(torch.tensor(all_flame_params["rotation"]).cuda().float())
         # self.trained_flame_params["translation"] = nn.Parameter(torch.tensor(all_flame_params["translation"]).cuda().float())
         # self.trained_flame_params["scale"] = nn.Parameter(torch.tensor(all_flame_params["scale"]).cuda().float())
-        # self.trained_flame_params["neck_pose"] = nn.Parameter(torch.tensor(all_flame_params["neck_pose"]).cuda().float())
 
         if cull_global_neighborhood:
             valid_points = ~self.define_flame_global_local_neighborhood()

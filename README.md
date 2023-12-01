@@ -59,14 +59,16 @@ We organize the datasets as follows:
 git clone https://github.com/ingra14m/Deformable-3D-Gaussians --recursive
 cd Deformable-3D-Gaussians
 
-conda create -n deformable_gaussian_env python=3.7
+conda create -n deformable_gaussian_env python=3.8
 conda activate deformable_gaussian_env
 
 # install pytorch
-pip install torch==1.13.1+cu116 torchvision==0.14.1+cu116 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu116
+conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.6 -c pytorch -c nvidia
 
-# install dependencies
+# install deform dependencies
 pip install -r requirements.txt
+
+# install pytorch3d (need for flame mesh)
 ```
 
 
